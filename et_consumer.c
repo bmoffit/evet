@@ -75,8 +75,8 @@ evetGetEtChunks(evetHandle_t &evh)
     }
   else
     {
-      printf("%s: ERROR: et_events_get returned %s\n",
-	     __func__, et_perror(status));
+      printf("%s: ERROR: et_events_get returned (%d) %s\n",
+	     __func__, status, et_perror(status));
 
       if(status == ET_ERROR_DEAD)
 	{
@@ -639,6 +639,7 @@ int main(int argc,char **argv)
   evh.currentChunkStat.evioHandle = 0;
   evh.currentChunkID = -1;
   evh.etChunkNumRead = -1;
+  evh.etChunkSize = chunk;
 
   /* allocate some memory */
   evh.etChunk = (et_event **) calloc((size_t)chunk, sizeof(et_event *));
