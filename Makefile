@@ -10,6 +10,9 @@
 # Uncomment DEBUG line, to include some debugging info ( -g and -Wall)
 #
 #
+
+CODA	?= /daqfs/daq_setups/coda/3.10_devel
+
 ET_LIB	?= ${CODA}/Linux-x86_64/lib
 ET_INC	?= ${CODA}/Linux-x86_64/include
 
@@ -32,7 +35,7 @@ CC			= g++
 AR                      = ar
 RANLIB                  = ranlib
 CFLAGS			= -std=c++11 -L. -L${ET_LIB} -let -lpthread -ldl -levio
-INCS			= -I. -I${CODA}/common/include -I${ET_INC} -I{EVIO_INC}
+INCS			= -I. -I${CODA}/common/include -I${ET_INC} -I${EVIO_INC}
 
 
 ifdef DEBUG
