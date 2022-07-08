@@ -61,58 +61,91 @@ typedef struct evetHandle
 
 } evetHandle_t ;
 
+evetHandle evh;
+
+#define EVETCHECKINIT(x)			\
+  if(x.etSysId == 0) {						\
+    printf("%s: ERROR: evet not initiallized\n", __func__);	\
+    return -1;}
+
+int32_t
+evetOpen(et_sys_id etSysId, int32_t chunk, evetHandle_t &evh)
+{
+  evh.etSysId = etSysId;
+  evh.etChunkSize = chunk;
+
+  evh.etAttId = 0;
+  evh.currentChunkID = -1;
+  evh.etChunkNumRead = -1;
+
+  evh.currentChunkStat.evioHandle = 0;
+  evh.currentChunkStat.length = 0;
+  evh.currentChunkStat.endian = 0;
+  evh.currentChunkStat.swap = 0;
+
+  /* allocate some memory */
+  evh.etChunk = (et_event **) calloc((size_t)chunk, sizeof(et_event *));
+  if (evh.etChunk == NULL) {
+    printf("%s: out of memory\n", __func__);
+    evh.etSysId = 0;
+    return -1;
+  }
+
+  return 0;
+}
+
+int32_t
+evetClose(evetHandle_t &evh)
+{
+
+  // Close up any currently opened evBufferOpen's.
+  if(evh.currentChunkStat.evioHandle)
+    {
+      int32_t stat = evClose(evh.currentChunkStat.evioHandle);
+      if(stat != S_SUCCESS)
+	{
+	  printf("%s: ERROR: evClose returned %s\n",
+		 __func__, et_perror(stat));
+	  return -1;
+	}
+    }
+
+  // put any events we may still have
+  if(evh.etChunkNumRead != -1)
+    {
+      /* putting array of events */
+      int32_t status = et_events_put(evh.etSysId, evh.etAttId, evh.etChunk, evh.etChunkNumRead);
+      if (status != ET_OK)
+	{
+	  printf("%s: ERROR: et_events_put returned %s\n",
+		 __func__, et_perror(status));
+	  return -1;
+	}
+    }
+
+  // free up the etChunk memory
+  if(evh.etChunk)
+    free(evh.etChunk);
+
+  return 0;
+}
+
+
 int32_t
 evetGetEtChunks(evetHandle_t &evh)
 {
-  printf("%s: enter\n", __func__);
-  // check for init'd id
+  if(evh.verbose == 1)
+    printf("%s: enter\n", __func__);
+
+  EVETCHECKINIT(evh);
 
   int32_t status = et_events_get(evh.etSysId, evh.etAttId, evh.etChunk,
 				 ET_SLEEP, NULL, evh.etChunkSize, &evh.etChunkNumRead);
-  if(status == ET_OK)
-    {
-      ;
-    }
-  else
+  if(status != ET_OK)
     {
       printf("%s: ERROR: et_events_get returned (%d) %s\n",
 	     __func__, status, et_perror(status));
 
-      if(status == ET_ERROR_DEAD)
-	{
-	  /* printf("%s: ET system is dead\n", argv[0]); */
-	  /* goto error; */
-	}
-      else if(status == ET_ERROR_TIMEOUT)
-	{
-	  /* printf("%s: got timeout\n", argv[0]); */
-	  /* goto end; */
-	}
-      else if(status == ET_ERROR_EMPTY)
-	{
-	  /* printf("%s: no events\n", argv[0]); */
-	  /* goto end; */
-	}
-      else if(status == ET_ERROR_BUSY)
-	{
-	  /* printf("%s: station is busy\n", argv[0]); */
-	  /* goto end; */
-	}
-      else if(status == ET_ERROR_WAKEUP)
-	{
-	  /* printf("%s: someone told me to wake up\n", argv[0]); */
-	  /* goto error; */
-	}
-      else if((status == ET_ERROR_WRITE) || (status == ET_ERROR_READ))
-	{
-	  /* printf("%s: socket communication error\n", argv[0]); */
-	  /* goto error; */
-	}
-      else
-	{
-	  /* printf("%s: get error, status = %d\n", argv[0], status); */
-	  /* goto error; */
-	}
       return -1;
     }
 
@@ -124,15 +157,10 @@ evetGetEtChunks(evetHandle_t &evh)
 int32_t
 evetGetChunk(evetHandle_t &evh)
 {
-  printf("%s: enter\n", __func__);
-  // B: get new chunk (et_get_event)
+  if(evh.verbose == 1)
+    printf("%s: enter\n", __func__);
 
-  // check for init'd id
-
-  // bump chunkID and check that it's less than chunksize.
-  // if it is
-  // .. fill chunk details
-  // .. evBufferOpen
+  EVETCHECKINIT(evh);
 
   evh.currentChunkID++;
 
@@ -185,7 +213,8 @@ evetGetChunk(evetHandle_t &evh)
       uint32_t *data = evh.currentChunkStat.data;
       uint32_t idata = 0, len = evh.currentChunkStat.length;
 
-      printf("data byte order = %s\n", (evh.currentChunkStat.endian == ET_ENDIAN_BIG ? "BIG" : "LITTLE"));
+      printf("data byte order = %s\n",
+	     (evh.currentChunkStat.endian == ET_ENDIAN_BIG) ? "BIG" : "LITTLE");
       printf(" %2d/%2d: data (len = %d) %s  int = %d\n",
 	     evh.currentChunkID, evh.etChunkNumRead,
 	     (int) len,
@@ -214,15 +243,13 @@ evetGetChunk(evetHandle_t &evh)
 }
 
 int32_t
-evetRead(evetHandle_t &evh, const uint32_t **outputBuffer, uint32_t *length)
+evetReadNoCopy(evetHandle_t &evh, const uint32_t **outputBuffer, uint32_t *length)
 {
-  printf("%s: enter\n", __func__);
-  // check for init'd id
+  if(evh.verbose == 1)
+    printf("%s: enter\n", __func__);
 
-  // check for non-null input pointers
+  EVETCHECKINIT(evh);
 
-  // A: do an evRead, and check output... if good
-  // .. return output
   int32_t status = evReadNoCopy(evh.currentChunkStat.evioHandle,
 				outputBuffer, length);
   if(status != S_SUCCESS)
@@ -240,7 +267,6 @@ evetRead(evetHandle_t &evh, const uint32_t **outputBuffer, uint32_t *length)
 		 __func__, status);
 	  return -1;
 	}
-
     }
 
   return 0;
@@ -632,28 +658,15 @@ int main(int argc,char **argv)
   et_station_config_setprescale(openconfig, 1);
   et_station_config_setselect(openconfig, ET_STATION_SELECT_ALL);
 
-  evetHandle evh;
-  evh.verbose = verbose;
-  evh.etSysId = 0;
-  evh.etAttId = 0;
-  evh.currentChunkStat.evioHandle = 0;
-  evh.currentChunkID = -1;
-  evh.etChunkNumRead = -1;
-  evh.etChunkSize = chunk;
-
-  /* allocate some memory */
-  evh.etChunk = (et_event **) calloc((size_t)chunk, sizeof(et_event *));
-  if (evh.etChunk == NULL) {
-    printf("%s: out of memory\n", __func__);
-    exit(1);
-  }
-
-
-
-  if (et_open(&evh.etSysId, et_name, openconfig) != ET_OK) {
+  et_sys_id id = 0;
+  if (et_open(&id, et_name, openconfig) != ET_OK) {
     printf("%s: et_open problems\n", __func__);
-    exit(1);
+    return -1;
   }
+
+  evh.verbose = verbose;
+
+  evetOpen(id, chunk, evh);
 
   et_open_config_destroy(openconfig);
 
@@ -717,16 +730,16 @@ int main(int argc,char **argv)
 
   while(status == 0)
     {
-      printf("evetRead(%2d): \n", evCount++);
 
       const uint32_t *readBuffer;
       uint32_t len;
-      status = evetRead(evh, &readBuffer, &len);
+      status = evetReadNoCopy(evh, &readBuffer, &len);
       bytes += len;
       totalBytes += len;
 
       if(status == 0)
 	{
+	  printf("evetRead(%2d): \n", ++evCount);
 	  uint32_t i;
 	  for (i=0; i< (len); i++) {
 	    printf("0x%08x ", readBuffer[i]);
@@ -739,6 +752,7 @@ int main(int argc,char **argv)
 
     }
 
+  evetClose(evh);
 
  error:
   printf("%s: ERROR\n", argv[0]);
@@ -763,5 +777,8 @@ static void *signal_thread (void *arg)
   sigwait(&signal_set, &sig_number);
 
   printf("Got control-C, exiting\n");
+
+  evetClose(evh);
+
   exit(1);
 }
